@@ -293,6 +293,7 @@ class WindowController {
   show() {
     if (this.browserWindow && !this.browserWindow.isVisible()) {
       log.info(`Showing window: ${this.windowId}`);
+      this.browserWindow.maximize(); // Maximize window on show
       this.browserWindow.show();
       this.focus(); // Optionally focus when shown
     }
