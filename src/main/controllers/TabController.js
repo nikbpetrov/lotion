@@ -125,6 +125,16 @@ class TabController {
 
       // Inject custom CSS after page loads
       this.injectCustomCSS();
+
+      // Check if we should auto-click "New" button (for database page creation)
+      const currentUrl = webContents.getURL();
+      if (currentUrl.includes('autoNew=true')) {
+        log.info(`Tab ${this.tabId}: Auto-clicking "New" button for database page creation`);
+        // Wait a bit for Notion to fully load, then click New
+        setTimeout(() => {
+          this.autoClickNewButton();
+        }, 1500); // delay to ensure Notion UI is ready
+      }
     });
 
     // Navigation started
@@ -387,6 +397,101 @@ class TabController {
   async reloadCustomCSS() {
     await this.injectCustomCSS();
   }
+
+  /**
+   * Auto-click the "New" button in Notion database views
+   * This is used when opening a database with &autoNew=true parameter
+   */
+  async autoClickNewButton() {
+    if (this.isDestroyed || !this.webContentsView) {
+      log.warn(`Cannot auto-click New button in destroyed tab: ${this.tabId}`);
+      return;
+    }
+
+    try {
+      log.debug(`Tab ${this.tabId}: Attempting to find and click "New" button`);
+      
+      // Inject JavaScript to find and click the New button
+      const result = await this.webContentsView.webContents.executeJavaScript(`
+        (function() {
+          // Find elements with "New" text
+          const elements = Array.from(document.querySelectorAll('div[role="button"], button'));
+          const newButton = elements.find(el => {
+            const text = el.textContent?.trim();
+            return text === 'New' || text === '+ New' || text === 'New page';
+          });
+          
+          if (newButton) {
+            console.log('Found "New" button, clicking...');
+            newButton.click();
+            return { success: true, message: 'Clicked New button' };
+          } else {
+            console.warn('Could not find "New" button');
+            return { success: false, message: 'New button not found' };
+          }
+        })();
+      `);
+
+      if (result.success) {
+        log.info(`Tab ${this.tabId}: Successfully clicked "New" button`);
+        
+        // Wait for page ID to appear in URL, then navigate to full page
+        // await this.waitForNewPageAndOpenFull();
+      } else {
+        log.warn(`Tab ${this.tabId}: ${result.message}`);
+      }
+    } catch (err) {
+      log.error(`Tab ${this.tabId}: Error auto-clicking "New" button:`, err);
+    }
+  }
+
+  /**
+   * Wait for new page ID to appear in URL after clicking New, then open in full page mode
+   */
+  // async waitForNewPageAndOpenFull() {
+  //   if (this.isDestroyed || !this.webContentsView) {
+  //     return;
+  //   }
+
+  //   log.debug(`Tab ${this.tabId}: Waiting for new page ID to appear in URL`);
+
+  //   // Poll URL for page ID parameter
+  //   let attempts = 0;
+  //   const maxAttempts = 10; // 10 attempts x 500ms = 5 seconds max wait
+    
+  //   const checkForPageId = async () => {
+  //     if (this.isDestroyed || !this.webContentsView) {
+  //       return;
+  //     }
+
+  //     const currentUrl = this.webContentsView.webContents.getURL();
+      
+  //     // Check if URL contains p= parameter (page ID in side panel)
+  //     const urlMatch = currentUrl.match(/[?&]p=([a-f0-9]+)/);
+      
+  //     if (urlMatch && urlMatch[1]) {
+  //       const pageId = urlMatch[1];
+  //       log.info(`Tab ${this.tabId}: Found new page ID: ${pageId}`);
+        
+  //       // Navigate to full page view
+  //       const fullPageUrl = `https://www.notion.so/${pageId}`;
+  //       log.info(`Tab ${this.tabId}: Navigating to full page: ${fullPageUrl}`);
+  //       this.loadURL(fullPageUrl);
+  //       return;
+  //     }
+
+  //     // Try again if not found yet
+  //     attempts++;
+  //     if (attempts < maxAttempts) {
+  //       setTimeout(checkForPageId, 500); // Check every 500ms
+  //     } else {
+  //       log.warn(`Tab ${this.tabId}: Timed out waiting for new page ID in URL`);
+  //     }
+  //   };
+
+  //   // Start checking after a short delay
+  //   setTimeout(checkForPageId, 500);
+  // }
 
   /**
    * Load a theme by name
